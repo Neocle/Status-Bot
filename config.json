@@ -1,0 +1,97 @@
+{
+    "clientId": "1079347805073719326",
+    "guildId": "1129412049152266250",
+    "alertChannelId": "1299401681586491605",
+    "alertRoleId": "1298972841685024849",
+
+    "webserverPublicAddress": "localhost:3000",
+    "rateLimit": 250,
+    "rateLimitTime": 60000,
+
+    "services": [
+        {
+            "category": "Web Services",
+            "name": "Website",
+            "host": "aloramc.com",
+            "port": 80
+        },
+        {
+            "category": "Web Services",
+            "name": "Knowledge Base",
+            "host": "kb.aloramc.com",
+            "port": 80
+        },
+        {
+            "category": "Web Services",
+            "name": "Staff KB",
+            "host": "staffkb.aloramc.com",
+            "port": 80
+        },
+        {
+            "category": "Web Services",
+            "name": "Punishments Dashboard",
+            "host": "bans.aloramc.com",
+            "port": 80
+        },
+        {
+            "category": "Web Services",
+            "name": "Staff Dashboard",
+            "host": "staff.aloramc.com",
+            "port": 80
+        },
+        {
+            "category": "Game Servers",
+            "name": "Proxy",
+            "host": "gh5.aquahost.io",
+            "port": 25000
+        },
+        {
+            "category": "Game Servers",
+            "name": "Hub",
+            "host": "gh5.aquahost.io",
+            "port": 25001
+        },
+        {
+            "category": "Game Servers",
+            "name": "CaveBlock",
+            "host": "gh5.aquahost.io",
+            "port": 25003
+        },
+        {
+            "category": "Game Servers",
+            "name": "Arcade",
+            "host": "gh5.aquahost.io",
+            "port": 25004
+        },
+        {
+            "category": "Game Servers",
+            "name": "SMP",
+            "host": "gh5.aquahost.io",
+            "port": 25005
+        },
+        {
+            "category": "Game Servers",
+            "name": "Dev",
+            "host": "gh5.aquahost.io",
+            "port": 25002
+        },
+        {
+            "category": "Databases",
+            "name": "Database1",
+            "host": "db.aquahost.io",
+            "port": 3306
+        },
+        {
+            "category": "Bots",
+            "name": "Support Bot",
+            "host": "gh5.aquahost.io",
+            "port": 25006
+        },
+        {
+            "category": "Bots",
+            "name": "Suggestions Bot",
+            "host": "gh5.aquahost.io",
+            "port": 25111
+        }
+    ]
+}
