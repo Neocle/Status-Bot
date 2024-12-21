@@ -3,120 +3,95 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Status Page</title>
+  <meta property="og:title" content="{{title}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:image" content="{{openGraphImage}}">
+  <meta name="theme-color" content="{{themeColor}}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{title}}</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+  <link rel="icon" href="{{favicon}}">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 font-sans leading-normal tracking-normal flex flex-col min-h-screen">
+
+<style>
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #374151;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #4b5563 transparent;
+    scrollbar-arrow-color: transparent;
+  }
+</style>
+
+<body class="bg-gray-100 text-gray-900 font-sans leading-normal tracking-normal flex flex-col min-h-screen dark:bg-zinc-800 transition-colors duration-500">
 
   <!-- Header -->
-  <header class="bg-blue-600 text-white py-8 shadow-md">
+  <header class="bg-[{{themeColor}}] text-white py-6 shadow-md">
     <div class="mx-auto px-4 text-center max-w-4xl">
-      <h1 class="text-3xl font-bold">Status</h1>
-      <p class="mt-2 text-lg">AAAAAAAAAAAAAAAAAAAAAAAAAAAA</p>
+      <h1 class="text-3xl font-bold">
+        <img src="https://imgur.com/H0XnV5X.png" alt="Logo" class="inline-block h-12 w-auto mr-2">
+      </h1>
+      <p class="mt-2 text-lg">Status Page</p>
     </div>
   </header>
 
+  <div class="absolute top-4 right-4 z-10">
+    <button id="dark-mode-toggle" onclick="toggleDarkMode()" 
+      class="p-2 rounded-full bg-gray-100 dark:bg-zinc-700 shadow-md dark:text-white text-zinc-800 
+      transition-all duration-500 ease-in-out">
+      <i id="dark-mode-icon" class="fa-solid fa-moon text-xl"></i>
+    </button>
+  </div>
+  
+
   <!-- Alert Banner -->
-  <div id="alert-banner" class="hidden bg-red-600 text-white text-2xl pl-4 py-4 shadow-md mx-auto w-full max-w-4xl mt-4 rounded"></div>
+  <div id="alert-banner" class="hidden bg-red-600 text-white text-2xl pl-3 py-3 shadow-md mx-auto w-full max-w-3xl sm:max-w-md md:max-w-lg mt-4 rounded-sm bg-yellow-400"></div>
 
   <!-- Main Content -->
   <main class="mx-auto px-4 py-6 flex-1 w-full max-w-4xl">
     <!-- Filter Buttons -->
     <div class="flex justify-end mb-8">
-      <button id="today" onclick="filterStatus('today')" class="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-700 focus:outline-none mx-1">Today</button>
-      <button id="thisWeek" onclick="filterStatus('thisWeek')" class="px-3 py-1 text-sm bg-gray-300 text-gray-700 rounded hover:bg-gray-400 focus:outline-none mx-1">This Week</button>
-      <button id="thisMonth" onclick="filterStatus('thisMonth')" class="px-3 py-1 text-sm bg-gray-300 text-gray-700 rounded hover:bg-gray-400 focus:outline-none mx-1">This Month</button>
+      <button id="daily" onclick="filterStatus('daily')" class="px-3 py-1 text-sm bg-[{{themeColor}}] text-white rounded focus:outline-none mx-1 transition-colors duration-500">Today</button>
+      <button id="weekly" onclick="filterStatus('weekly')" class="px-3 py-1 text-sm bg-gray-300 text-gray-700 rounded focus:outline-none mx-1 dark:bg-zinc-700 dark:text-white transition-colors duration-500">This Week</button>
+      <button id="monthly" onclick="filterStatus('monthly')" class="px-3 py-1 text-sm bg-gray-300 text-gray-700 rounded focus:outline-none mx-1 dark:bg-zinc-700 dark:text-white transition-colors duration-500">This Month</button>
     </div>
 
     <div id="status-container"></div>
 
-    <!--
-    <section class="mb-12">
-      <h2 class="text-lg font-semibold text-gray-700 mb-2">Backend Services</h2>
-      <div class="bg-white shadow-md rounded-lg">
-        <div class="flex justify-between px-4 py-3 border-b">
-          <div>
-            <span class="block">API Service</span>
-            <span class="text-gray-500 text-sm">Uptime: 99.99%</span>
-          </div>
-          <span id="api-status" class="text-green-500 font-medium self-center">Operational</span>
-        </div>
-        <div class="flex justify-between px-4 py-3">
-          <div>
-            <span class="block">Database</span>
-            <span class="text-gray-500 text-sm">Uptime: 97.50%</span>
-          </div>
-          <span id="db-status" class="text-yellow-500 font-medium self-center">Degraded</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="mb-12">
-      <h2 class="text-lg font-semibold text-gray-700 mb-2">Frontend Services</h2>
-      <div class="bg-white shadow-md rounded-lg">
-        <div class="flex justify-between px-4 py-3 border-b">
-          <div>
-            <span class="block">Website</span>
-            <span class="text-gray-500 text-sm">Uptime: 99.95%</span>
-          </div>
-          <span id="web-status" class="text-green-500 font-medium self-center">Operational</span>
-        </div>
-        <div class="flex justify-between px-4 py-3">
-          <div>
-            <span class="block">User Dashboard</span>
-            <span class="text-gray-500 text-sm">Uptime: 85.00%</span>
-          </div>
-          <span id="dashboard-status" class="text-red-500 font-medium self-center">Outage</span>
-        </div>
-      </div>
-    </section>-->
-
     <!-- Recent Outages -->
     <section class="mb-12">
-      <h2 class="text-lg font-semibold text-gray-700 mb-4">Recent Outages</h2>
-
-      <div class="text-gray-700 mb-8">
-        <p class="font-medium">Dec 10, 2024</p>
-        <hr class="border-t border-gray-300 my-2">
-        <p>No incidents reported today.</p>
-      </div>
-
-      <div class="text-gray-700 mb-8">
-        <p class="font-medium">Dec 9, 2024</p>
-        <hr class="border-t border-gray-300 my-2">
-        <p>No incidents reported.</p>
-      </div>
-
-      <div class="text-gray-700 mb-8">
-        <p class="font-medium">Dec 8, 2024</p>
-        <hr class="border-t border-gray-300 my-2">
-        <p>No incidents reported.</p>
-      </div>
-
-      <div class="text-gray-700 mb-8">
-        <p class="font-medium">Dec 7, 2024</p>
-        <hr class="border-t border-gray-300 my-2">
-        <p>No incidents reported.</p>
-      </div>
+      <h2 class="text-lg font-semibold text-gray-700 mb-4 dark:text-white">Recent Outages</h2>
+      <div id="outages-container" class="text-gray-700 mb-8 dark:text-white">
     </section>
   </main>
 
   <!-- Footer -->
-  <footer class="bg-gray-800 text-white text-center py-4">
+  <footer id="footer" class="bg-zinc-900 text-white text-center py-4 p-4">
     <p>Made with ❤️ by <span class="font-bold"><a href="https://github.com/Neocle">Neocle</a></span></p>
   </footer>
 
-  <script src="script.js"></script>
-  <!-- filtering -->
-  <script>
-    function filterStatus(period) {
-      document.querySelectorAll("button").forEach(button => {
-        button.classList.remove("bg-blue-500", "text-white");
-        button.classList.add("bg-gray-300", "text-gray-700");
-      });
-      document.getElementById(period).classList.add("bg-blue-500", "text-white");
+  <script src="/script"></script>
 
-      alert("Showing statuses for: " + period.charAt(0).toUpperCase() + period.slice(1));
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
     }
   </script>
 </body>

@@ -1,6 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder, Colors } = require('discord.js');
-const { saveEmbedInfo } = require('../database/database');
-const { getServiceStatuses } = require('../database/database');
+const { SlashCommandBuilder, EmbedBuilder, Colors, PermissionFlagsBits } = require('discord.js');
+const { saveEmbedInfo, getServiceStatuses } = require('../database/database');
+const config = require('../config.json');
 
 const startEmbedUpdates = async (client, channelId, messageId) => {
     const channel = await client.channels.fetch(channelId);
@@ -9,7 +9,7 @@ const startEmbedUpdates = async (client, channelId, messageId) => {
     const message = await channel.messages.fetch(messageId);
     if (!message) return;
 
-    const embed = new EmbedBuilder().setTitle('Service Status').setColor(Colors.Blue);
+    const embed = new EmbedBuilder().setTitle('Service Status').setColor(config.embedsColor);
 
     setInterval(() => {
         getServiceStatuses((err, rows) => {
@@ -20,15 +20,49 @@ const startEmbedUpdates = async (client, channelId, messageId) => {
 
             const categorizedStatuses = {};
             rows.forEach((row) => {
+                let statusText;
+                let statusEmoji;
+
+                if (typeof row.current_status === 'string') {
+                    let severityEmoji = '';
+                    switch (row.severity.toLowerCase()) {
+                        case 'low':
+                            severityEmoji = '🟡';
+                            statusText = row.current_status;
+                            break;
+                        case 'medium':
+                            severityEmoji = '🟠';
+                            statusText = row.current_status;
+                            break;
+                        case 'high':
+                            severityEmoji = '🔴';
+                            statusText = row.current_status;
+                            break;
+                        default:
+                            severityEmoji = '⚪';
+                            statusText = row.current_status;
+                            break;
+                    }
+
+                    statusEmoji = severityEmoji;
+                } else {
+                    if (row.current_status === 1) {
+                        statusEmoji = '🟢';
+                        statusText = 'Online';
+                    } else {
+                        statusEmoji = '🔴';
+                        statusText = 'Offline';
+                    }
+                }
+
                 const uptimePercentage = ((row.uptime / row.checks) * 100).toFixed(2);
-                const status = `${row.name}: ${
-                    row.current_status ? '🟢 Online' : '🔴 Offline'
-                } (${uptimePercentage}% uptime)`;
+
+                const statusLine = `${row.name}: ${statusEmoji} ${statusText} (Uptime: ${uptimePercentage}%)`;
 
                 if (!categorizedStatuses[row.category]) {
                     categorizedStatuses[row.category] = [];
                 }
-                categorizedStatuses[row.category].push(status);
+                categorizedStatuses[row.category].push(statusLine);
             });
 
             let description = '';
@@ -39,22 +73,47 @@ const startEmbedUpdates = async (client, channelId, messageId) => {
             embed.setDescription(description).setTimestamp();
             message.edit({ embeds: [embed] });
         });
-    }, 60000); 
+    }, 60000);
 };
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('statuspanel')
-        .setDescription('Sends a status panel and regularly updates it.'),
+        .setDescription('Sends a status panel and regularly updates it.')
+        .addChannelOption(option =>
+            option
+                .setName('channel')
+                .setDescription('The channel to send the status panel to (defaults to current channel).')
+                .setRequired(false)
+        ),
     async execute(interaction) {
-        const embed = new EmbedBuilder().setTitle('Service Status').setColor(Colors.Blue);
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({
+                content: '❌ You need to have **Administrator** permissions to use this command.',
+                ephemeral: true,
+            });
+        }
 
-        await interaction.reply({ content: 'Status panel sent!', ephemeral: true });
+        const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
 
-        const message = await interaction.followUp({ embeds: [embed], fetchReply: true });
+        if (!targetChannel.isTextBased()) {
+            return interaction.reply({
+                content: '❌ Please select a valid text channel.',
+                ephemeral: true,
+            });
+        }
 
-        saveEmbedInfo(interaction.channelId, message.id);
-        startEmbedUpdates(interaction.client, interaction.channelId, message.id);
+        const embed = new EmbedBuilder().setTitle('Service Status').setColor(config.embedsColor);
+
+        const message = await targetChannel.send({ embeds: [embed] });
+
+        saveEmbedInfo(targetChannel.id, message.id);
+        startEmbedUpdates(interaction.client, targetChannel.id, message.id);
+
+        await interaction.reply({
+            content: `✅ Status panel has been sent to ${targetChannel}.`,
+            ephemeral: true,
+        });
     },
     startEmbedUpdates,
 };

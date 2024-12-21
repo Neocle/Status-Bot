@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, Colors } = require('discord.js');
 const { getServiceStatuses, calculateUptime } = require('../database/database');
+const config = require('../config.json');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -18,7 +19,7 @@ module.exports = {
         ),
     async execute(interaction) {
         const duration = interaction.options.getString('duration') || 'all';
-        const embed = new EmbedBuilder().setTitle('Service Status').setColor(Colors.Blue);
+        const embed = new EmbedBuilder().setTitle('Service Status').setColor(config.embedsColor);
 
         getServiceStatuses((err, rows) => {
             if (err) {
@@ -42,25 +43,61 @@ module.exports = {
                 }, {});
 
                 const categorizedStatuses = {};
+
                 rows.forEach((row) => {
-                    const status = `${row.name}: ${
-                        row.current_status ? '🟢 Online' : '🔴 Offline'
-                    } (Uptime: ${uptimeMap[row.name] || 'N/A'})`;
-                
+                    let statusText;
+                    let statusEmoji;
+
+                    if (typeof row.current_status === 'string') {
+                        let severityEmoji = '';
+                        switch (row.severity.toLowerCase()) {
+                            case 'low':
+                                severityEmoji = '🟡';
+                                statusText = row.current_status;
+                                break;
+                            case 'medium':
+                                severityEmoji = '🟠';
+                                statusText = row.current_status;
+                                break;
+                            case 'high':
+                                severityEmoji = '🔴';
+                                statusText = row.current_status;
+                                break;
+                            default:
+                                severityEmoji = '⚪';
+                                statusText = row.current_status;
+                                break;
+                        }
+
+                        statusEmoji = severityEmoji;
+                    } else {
+                        if (row.current_status === 1) {
+                            statusEmoji = '🟢';
+                            statusText = 'Online';
+                        } else {
+                            statusEmoji = '🔴';
+                            statusText = 'Offline';
+                        }
+                    }
+
+                    const uptime = uptimeMap[row.name] || 'N/A';
+
+                    const statusLine = `${row.name}: ${statusEmoji} ${statusText} (Uptime: ${uptime})`;
+
                     if (!categorizedStatuses[row.category]) {
                         categorizedStatuses[row.category] = [];
                     }
-                    categorizedStatuses[row.category].push(status);
-                });                
+                    categorizedStatuses[row.category].push(statusLine);
+                });
 
                 let description = '';
                 for (const [category, services] of Object.entries(categorizedStatuses)) {
                     description += `**${category}**\n${services.join('\n')}\n\n`;
                 }
 
-                embed.setDescription(description).setTimestamp();
+                embed.setDescription(description.trim() || 'No service statuses available.').setTimestamp();
                 interaction.reply({ embeds: [embed] });
             });
         });
-    }
+    },
 };

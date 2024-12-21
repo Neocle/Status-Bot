@@ -58,7 +58,10 @@ db.serialize(() => {
             token TEXT NOT NULL UNIQUE,
             user_id TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
+        );
+
+        INSERT OR IGNORE INTO tokens (token, user_id)
+        VALUES ('c7d726b205c301a4117f4134b0d651b43518f720362a02d866cde2f83d03d2a6', '${config.clientId}');
     `);
 
     db.run(`
@@ -70,7 +73,52 @@ db.serialize(() => {
             FOREIGN KEY (service_name) REFERENCES service_status(name)
         )
     `);
+    
+    db.run(`
+        CREATE TABLE IF NOT EXISTS manual_status (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service_id INTEGER NOT NULL,
+            manual_status TEXT NOT NULL,
+            description TEXT,
+            severity TEXT NOT NULL,
+            continue_uptime BOOLEAN NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (service_id) REFERENCES service_status(id),
+            UNIQUE (service_id)
+        )
+    `);
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS incidents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            service_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            date TEXT NOT NULL,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (service_id) REFERENCES service_status(id),
+            UNIQUE (service_id)
+        )
+    `);
+
 });
+
+const getServices = (callback) => {
+    db.all(
+        `SELECT id, name FROM service_status`, 
+        [],
+        (err, rows) => {
+            if (err) {
+                console.error('Error retrieving services:', err.message);
+                return callback(err, null);
+            }
+
+            callback(null, rows);
+        }
+    );
+};
+
 
 const saveEmbedInfo = (channelId, messageId) => {
     db.run(
@@ -120,14 +168,64 @@ const initializeServices = (services) => {
 };
 
 const getServiceStatuses = (callback) => {
-    db.all(`SELECT * FROM service_status`, [], (err, rows) => {
-        if (err) {
-            console.error('Error retrieving service statuses:', err.message);
-            callback(err, null);
-        } else {
-            callback(null, rows);
+    const servicesOrder = config.servicesOrder;
+
+    const categoryOrder = {};
+    let categoryIndex = 0;
+
+    for (const category in servicesOrder) {
+        categoryOrder[category] = categoryIndex++;
+    }
+
+    const serviceOrderMap = {};
+    for (const category in servicesOrder) {
+        serviceOrderMap[category] = servicesOrder[category].reduce((map, service, index) => {
+            map[service] = index;
+            return map;
+        }, {});
+    }
+
+    db.all(
+        `
+        SELECT 
+            ss.id, 
+            ss.name, 
+            ss.host, 
+            ss.port, 
+            ss.category, 
+            COALESCE(ms.manual_status, ss.current_status) AS current_status,
+            ms.severity,
+            ms.continue_uptime,
+            ss.uptime, 
+            ss.downtime, 
+            ss.checks
+        FROM 
+            service_status ss
+        LEFT JOIN 
+            manual_status ms 
+        ON 
+            ss.id = ms.service_id
+        `,
+        [],
+        (err, rows) => {
+            if (err) {
+                console.error('Error retrieving service statuses:', err.message);
+                callback(err, null);
+            } else {
+                rows.sort((a, b) => {
+                    const categoryComparison = categoryOrder[a.category] - categoryOrder[b.category];
+                    if (categoryComparison !== 0) return categoryComparison;
+
+                    const serviceComparison = (serviceOrderMap[a.category] && serviceOrderMap[a.category][a.name]) -
+                                              (serviceOrderMap[b.category] && serviceOrderMap[b.category][b.name]);
+
+                    return serviceComparison;
+                });
+
+                callback(null, rows);
+            }
         }
-    });
+    );
 };
 
 const updateServiceStatus = (name, success) => {
@@ -137,18 +235,27 @@ const updateServiceStatus = (name, success) => {
             return;
         }
 
-        const checks = (row?.checks || 0) + 1;
-        const uptime = (row?.uptime || 0) + (success ? 1 : 0);
-        const downtime = (row?.downtime || 0) + (success ? 0 : 1);
-        const currentStatus = success ? 1 : 0;
-
-        db.run(
-            `UPDATE service_status SET uptime = ?, downtime = ?, checks = ?, current_status = ? WHERE name = ?`,
-            [uptime, downtime, checks, currentStatus, name],
-            (err) => {
-                if (err) console.error('Error updating service status:', err.message);
+        db.get(`SELECT * FROM manual_status WHERE service_id = ?`, [row.id], (manualErr, manualRow) => {
+            if (manualErr) {
+                console.error('Error querying manual status:', manualErr.message);
+                return;
             }
-        );
+
+            const isOffline = manualRow && manualRow.continue_uptime === 'no';
+
+            const currentStatus = isOffline ? 0 : (success ? 1 : 0);
+            const checks = (row?.checks || 0) + 1;
+            const uptime = (row?.uptime || 0) + (currentStatus === 1 ? 1 : 0);
+            const downtime = (row?.downtime || 0) + (currentStatus === 0 ? 1 : 0);
+
+            db.run(
+                `UPDATE service_status SET uptime = ?, downtime = ?, checks = ?, current_status = ? WHERE name = ?`,
+                [uptime, downtime, checks, currentStatus, name],
+                (err) => {
+                    if (err) console.error('Error updating service status:', err.message);
+                }
+            );
+        });
     });
 };
 
@@ -190,12 +297,6 @@ const recordDailyUptime = (name) => {
                         (err) => {
                             if (err) {
                                 console.error(`Error inserting into daily_status for ${name}:`, err.message);
-                            } else {
-                                console.log(
-                                    `Inserted new daily uptime for ${name} on ${date}: ${uptimePercentage.toFixed(
-                                        2
-                                    )}%`
-                                );
                             }
                         }
                     );
@@ -218,7 +319,7 @@ const calculateUptime = (period, callback) => {
 
     if (period === 'daily') {
         query += ` WHERE d.date = ?`;
-        params.push(now.toISOString().split('T')[0]); // Today's date
+        params.push(now.toISOString().split('T')[0]);
     } else if (period === 'weekly') {
         query += ` WHERE d.date >= ?`;
         const startOfWeek = new Date(now.setDate(now.getDate() - 7)).toISOString().split('T')[0];
@@ -242,7 +343,7 @@ const calculateUptime = (period, callback) => {
 };
 
 const lockDailyUptime = () => {
-    const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const date = new Date().toISOString().split('T')[0];
 
     db.all(`SELECT * FROM daily_status WHERE date = ?`, [date], (err, rows) => {
         if (err) {
@@ -255,21 +356,46 @@ const lockDailyUptime = () => {
             return;
         }
 
-        rows.forEach((record) => {
-            console.log(`Daily uptime finalized for Service ID=${record.service_id} on ${date}`);
-        });
-
         db.run(
             `UPDATE daily_status SET finalized = 1 WHERE date = ?`,
             [date],
             (updateErr) => {
                 if (updateErr) {
                     console.error('Error finalizing daily_status records:', updateErr.message);
-                } else {
-                    console.log(`All daily_status records for ${date} have been finalized.`);
                 }
             }
         );
+    });
+};
+
+const resetDailyMetricsAndFinalize = (currentDate) => {
+    db.get(`SELECT date FROM daily_status ORDER BY date DESC LIMIT 1`, [], (err, row) => {
+        if (err) {
+            console.error('Error retrieving last reset date:', err.message);
+            return;
+        }
+
+        const lastResetDate = row?.date || null;
+
+        if (lastResetDate !== currentDate) {
+            if (lastResetDate) {
+                db.run(
+                    `UPDATE daily_status SET finalized = 1 WHERE date = ?`,
+                    [lastResetDate],
+                    (err) => {
+                        if (err) {
+                            console.error('Error finalizing daily_status:', err.message);
+                        }
+                    }
+                );
+            }
+
+            db.run(`UPDATE service_status SET uptime = 0, downtime = 0, checks = 0`, (err) => {
+                if (err) {
+                    console.error('Error resetting daily metrics:', err.message);
+                }
+            });
+        }
     });
 };
 
@@ -277,10 +403,13 @@ const startPeriodicUpdates = () => {
     setInterval(async () => {
         const now = new Date();
         const currentHour = now.getHours();
+        const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
+
+        resetDailyMetricsAndFinalize(currentDate);
 
         for (const service of config.services) {
             try {
-                const result = await pingService(service.host, service.port);
+                const result = await pingService(service.host, service.port, service.type);
                 updateServiceStatus(service.name, result.success);
             } catch (error) {
                 console.error(`Error pinging service ${service.name}:`, error.message);
@@ -291,11 +420,6 @@ const startPeriodicUpdates = () => {
         config.services.forEach((service) => {
             recordDailyUptime(service.name);
         });
-
-        if (currentHour === 0) {
-            console.log('Finalizing daily uptime records...');
-            lockDailyUptime();
-        }
     }, 60000);
 };
 
@@ -310,7 +434,6 @@ const generateAndStoreToken = (userId, callback) => {
                 console.error('Error saving token to database:', err.message);
                 callback(err, null);
             } else {
-                console.log(`Token generated and saved for user ${userId}: ${token}`);
                 callback(null, token);
             }
         }
@@ -323,7 +446,6 @@ const revokeToken = (token, callback) => {
             console.error('Error revoking token:', err.message);
             callback(err);
         } else {
-            console.log(`Token successfully revoked: ${token}`);
             callback(null);
         }
     });
@@ -390,7 +512,6 @@ const getStatusesByDate = (date, callback) => {
         }
 
         if (!rows.length) {
-            console.log(`No statuses found for the date ${date}.`);
             return callback(null, []);
         }
 
@@ -430,6 +551,159 @@ const deleteAlert = (serviceName) => {
     );
 };
 
+const setManualStatus = (serviceName, manualStatus, description, severity, continueUptime, callback) => {
+    db.get(`SELECT id FROM service_status WHERE name = ?`, [serviceName], (err, row) => {
+        if (err || !row) {
+            return callback(err || new Error('Service not found'));
+        }
+
+        db.run(
+            `INSERT INTO manual_status (service_id, manual_status, description, severity, continue_uptime) 
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(service_id) DO UPDATE SET 
+             manual_status = excluded.manual_status, 
+             description = excluded.description,
+             severity = excluded.severity,
+             continue_uptime = excluded.continue_uptime,
+             updated_at = CURRENT_TIMESTAMP`,
+            [row.id, manualStatus, description, severity, continueUptime],
+            (insertErr) => {
+                if (insertErr) {
+                    console.error(`Error setting manual status for '${serviceName}':`, insertErr.message);
+                    return callback(insertErr);
+                }
+                callback(null);
+            }
+        );
+    });
+};
+
+const unsetManualStatus = (serviceName, callback) => {
+    db.get(`SELECT id FROM service_status WHERE name = ?`, [serviceName], (err, row) => {
+        if (err || !row) {
+            return callback(err || new Error('Service not found'));
+        }
+
+        db.run(
+            `DELETE FROM manual_status WHERE service_id = ?`,
+            [row.id],
+            (deleteErr) => {
+                if (deleteErr) {
+                    console.error(`Error unsetting manual status for '${serviceName}':`, deleteErr.message);
+                    return callback(deleteErr);
+                }
+                callback(null);
+            }
+        );
+    });
+};
+
+const getManualStatus = (serviceName, callback) => {
+    const query = `
+        SELECT ms.manual_status, ms.description
+        FROM manual_status ms
+        JOIN service_status ss ON ms.service_id = ss.id
+        WHERE ss.name = ?
+    `;
+
+    db.get(query, [serviceName], (err, row) => {
+        if (err) {
+            return callback(err, null);
+        }
+
+        if (!row) {
+            return callback(null, null);
+        }
+
+        callback(null, row);
+    });
+};
+
+const setNewIncident = (serviceName, title, description, severity, date, callback) => {
+    db.get(`SELECT id FROM service_status WHERE name = ?`, [serviceName], (err, row) => {
+        if (err || !row) {
+            return callback(err || new Error('Service not found'));
+        }
+
+        db.run(
+            `INSERT INTO incidents (service_id, title, description, severity, date) 
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(service_id) DO UPDATE SET 
+             title = excluded.title, 
+             description = excluded.description,
+             severity = excluded.severity,
+             date = excluded.date,
+             updated_at = CURRENT_TIMESTAMP`,
+            [row.id, title, description, severity, date],
+            (insertErr) => {
+                if (insertErr) {
+                    console.error(`Error adding incident for '${serviceName}':`, insertErr.message);
+                    return callback(insertErr);
+                }
+                callback(null);
+            }
+        );
+    });
+};
+
+const getIncidents = (callback) => {
+    db.all(
+        `SELECT ss.name AS service, i.title, i.description, i.severity, i.date, i.updated_at 
+         FROM incidents i
+         JOIN service_status ss ON i.service_id = ss.id`, 
+        [],
+        (err, rows) => {
+            if (err) {
+                console.error('Error retrieving incidents:', err.message);
+                return callback(err, null);
+            }
+
+            callback(null, rows);
+        }
+    );
+};
+
+const removeIncident = (title, serviceName, callback) => {
+    db.get(
+        `SELECT id FROM service_status WHERE name = ?`,
+        [serviceName],
+        (err, row) => {
+            if (err || !row) {
+                return callback(err || new Error('Service not found'));
+            }
+
+            db.run(
+                `DELETE FROM incidents WHERE title = ? AND service_id = ?`,
+                [title, row.id],
+                (deleteErr) => {
+                    if (deleteErr) {
+                        console.error(`Error removing incident for service '${serviceName}' with title '${title}':`, deleteErr.message);
+                        return callback(deleteErr);
+                    }
+                    callback(null);
+                }
+            );
+        }
+    );
+};
+
+const cleanupOldIncidents = () => {
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const dateLimit = fourteenDaysAgo.toISOString().slice(0, 16).replace('T', ' ');
+    
+    db.run(
+        `DELETE FROM incidents WHERE date < ?`,
+        [dateLimit],
+        (err) => {
+            if (err) {
+                console.error('Error cleaning up old incidents:', err.message);
+            }
+        }
+    );
+};
+setInterval(cleanupOldIncidents, 24 * 60 * 60 * 1000);
+
 const getServiceUptimeHistory = (serviceName, days) => {
     return new Promise((resolve, reject) => {
         let query = `
@@ -449,7 +723,6 @@ const getServiceUptimeHistory = (serviceName, days) => {
                 console.error('Error fetching service uptime history:', err.message);
                 reject(err);
             } else {
-                console.log('Uptime History:', results); // Debugging
                 resolve(results);
             }
         });
@@ -472,5 +745,12 @@ module.exports = {
     getServiceUptimeHistory,
     saveAlert,
     getAlerts,
-    deleteAlert
+    deleteAlert,
+    setManualStatus,
+    unsetManualStatus,
+    getManualStatus,
+    getServices,
+    setNewIncident,
+    removeIncident,
+    getIncidents
 };

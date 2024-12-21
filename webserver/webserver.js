@@ -1,20 +1,74 @@
 const express = require('express');
 const path = require('path');
-const { getServiceStatuses, calculateUptime, authorize, getStatusesByDate, getServiceUptimeHistory } = require('../database/database');
+const fs = require('fs');
+const { getServiceStatuses, calculateUptime, authorize, getStatusesByDate, getServiceUptimeHistory, getIncidents } = require('../database/database');
 const app = express();
 const config = require('../config.json');
 
-app.use(express.static(path.join(__dirname, 'public')));
- 
+function renderTemplate(filePath, data) {
+    let content = fs.readFileSync(filePath, 'utf8');
+    for (const key in data) {
+        const placeholder = new RegExp(`{{${key}}}`, 'g');
+        content = content.replace(placeholder, data[key]);
+    }
+    return content;
+}
+
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    const html = renderTemplate(path.join(__dirname, 'public', 'index.html'), {
+        title: config.webserver.title,
+        themeColor: config.webserver.themeColor,
+        logo: config.webserver.logo,
+        favicon: config.webserver.favicon,
+        description: config.webserver.description,
+        openGraphImage: config.webserver.openGraphImage,
+    });
+  res.send(html);
 });
+
+app.get('/script', (req, res) => {
+
+    const jsFilePath = path.join(__dirname, 'public', `script.js`);
+
+    if (fs.existsSync(jsFilePath)) {
+        const jsContent = renderTemplate(jsFilePath, {
+            title: config.webserver.title,
+            themeColor: config.webserver.themeColor,
+            logo: config.webserver.logo,
+            favicon: config.webserver.favicon,
+            description: config.webserver.description,
+            openGraphImage: config.webserver.openGraphImage,
+        });
+
+        res.send(jsContent);
+    } else {
+        res.status(404).send('Script not found');
+    }
+});
+
 
 app.get('/statuses', async (req, res) => {
     try {
         const fetch = (await import('node-fetch')).default;
 
-        const response = await fetch(`http://${config.webserverPublicAddress}/api/statuses`, {
+        const response = await fetch(`${config.webserver.publicAddress}/api/statuses`, {
+            headers: {
+                Authorization: 'c7d726b205c301a4117f4134b0d651b43518f720362a02d866cde2f83d03d2a6',
+            },
+        });
+        const data = await response.json();
+        res.json(data);
+    } catch (err) {
+        console.error('Error fetching statuses:', err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+app.get('/incidents', async (req, res) => {
+    try {
+        const fetch = (await import('node-fetch')).default;
+
+        const response = await fetch(`${config.webserver.publicAddress}/api/services/incidents`, {
             headers: {
                 Authorization: 'c7d726b205c301a4117f4134b0d651b43518f720362a02d866cde2f83d03d2a6',
             },
@@ -56,26 +110,63 @@ app.get('/api/statuses', authorize, (req, res) => {
             fetchUptimeForPeriod('all'),
         ])
             .then(([dailyUptime, weeklyUptime, monthlyUptime, allTimeUptime]) => {
-                const categorizedServices = {};
+                const categorizedStatuses = {};
+
                 services.forEach((service) => {
-                    const status = {
-                        name: service.name,
-                        current_status: service.current_status ? '🟢 Online' : '🔴 Offline',
-                        uptimes: {
-                            daily: dailyUptime[service.name] || 0,
-                            weekly: weeklyUptime[service.name] || 0,
-                            monthly: monthlyUptime[service.name] || 0,
-                            all: allTimeUptime[service.name] || 0,
-                        },
+                    let statusText;
+                    let statusEmoji;
+
+                    if (typeof service.current_status === 'string') {
+                        let severityEmoji = '';
+                        switch (service.severity.toLowerCase()) {
+                            case 'low':
+                                severityEmoji = '🟡';
+                                statusText = service.current_status;
+                                break;
+                            case 'medium':
+                                severityEmoji = '🟠';
+                                statusText = service.current_status;
+                                break;
+                            case 'high':
+                                severityEmoji = '🔴';
+                                statusText = service.current_status;
+                                break;
+                            default:
+                                severityEmoji = '⚪';
+                                statusText = service.current_status;
+                                break;
+                        }
+                        statusEmoji = severityEmoji;
+                    } else {
+                        if (service.current_status === 1) {
+                            statusEmoji = '🟢';
+                            statusText = 'Online';
+                        } else {
+                            statusEmoji = '🔴';
+                            statusText = 'Offline';
+                        }
+                    }
+
+                    const uptime = {
+                        daily: dailyUptime[service.name] || 0,
+                        weekly: weeklyUptime[service.name] || 0,
+                        monthly: monthlyUptime[service.name] || 0,
+                        all: allTimeUptime[service.name] || 0,
                     };
 
-                    if (!categorizedServices[service.category]) {
-                        categorizedServices[service.category] = [];
+                    const status = {
+                        name: service.name,
+                        current_status: `${statusEmoji} ${statusText}`,
+                        uptimes: uptime,
+                    };
+
+                    if (!categorizedStatuses[service.category]) {
+                        categorizedStatuses[service.category] = [];
                     }
-                    categorizedServices[service.category].push(status);
+                    categorizedStatuses[service.category].push(status);
                 });
 
-                res.json(categorizedServices);
+                res.json(categorizedStatuses);
             })
             .catch((uptimeErr) => {
                 console.error('Error calculating uptimes:', uptimeErr);
@@ -141,5 +232,39 @@ app.get('/api/services/:serviceId/uptime', authorize, async (req, res) => {
     }
 });
 
+app.get('/api/services/incidents', authorize, (req, res) => {
+    const { serviceName, date } = req.query;
 
-app.listen(3000, () => console.log('Webserver running on http://localhost:3000'));
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (date && !dateRegex.test(date)) {
+        return res.status(400).send('Invalid date format. Please use YYYY-MM-DD.');
+    }
+
+    getIncidents((err, incidents) => {
+        if (err) {
+            console.error('Error retrieving incidents:', err.message);
+            return res.status(500).send('Internal Server Error');
+        }
+
+        const filteredIncidents = incidents.filter(incident => {
+            const incidentService = incident.service || '';
+
+            const matchesService = serviceName ? incidentService.toLowerCase() === serviceName.toLowerCase() : true;
+            const matchesDate = !date || incident.date.startsWith(date);
+
+            return matchesService && matchesDate;
+        });
+
+        if (!filteredIncidents || filteredIncidents.length === 0) {
+            return res.status(404).send(`No incidents found for the given criteria.`);
+        }
+
+        res.json({
+            service: serviceName || 'All Services',
+            incidents: filteredIncidents,
+        });
+    });
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
+app.listen(`${config.webserver.port}`, () => console.log(`Webserver running on http://localhost:${config.webserver.port}`));

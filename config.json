@@ -1,97 +1,137 @@
 {
     "clientId": "1079347805073719326",
     "guildId": "1129412049152266250",
+    "panelChannelId": "1299401681586491605",
     "alertChannelId": "1299401681586491605",
     "alertRoleId": "1298972841685024849",
+    "embedsColor": "#008eff",
 
-    "webserverPublicAddress": "localhost:3000",
-    "rateLimit": 250,
-    "rateLimitTime": 60000,
+    "webserver": {
+        "port": 80,
+        "publicAddress": "http://localhost",
+        "apiRateLimit": 250,
+        "rateLimitTime": 60000,
+        "title": "AloraMC Status",
+        "description": "AloraMC: Status Page, track the real-time status of all services and incidents. Stay informed with up-to-date service health, recent outages, and detailed incident reports, all in one centralized location.",
+        "themeColor": "#008eff",
+        "openGraphImage": "https://s3.zyztem.dev/aloramc/web/favicon/android-chrome-512x512.png",
+        "favicon": "https://s3.zyztem.dev/aloramc/web/favicon/favicon.ico",
+        "logo": "https://imgur.com/H0XnV5X"
+    },
 
+
+    "servicesOrder": {
+        "Web Services": ["Website", "Knowledge Base", "Staff KB", "Punishments Dashboard", "Staff Dashboard"],
+        "Game Servers": ["Bedrock", "Proxy", "Hub", "CaveBlock", "SMP", "Arcade", "Dev"],
+        "Databases": ["Database1"],
+        "Bots": ["Support Bot", "Suggestions Bot"]
+    },
+    
     "services": [
         {
             "category": "Web Services",
             "name": "Website",
             "host": "aloramc.com",
-            "port": 80
+            "port": 80,
+            "type": "web-service"
         },
         {
             "category": "Web Services",
             "name": "Knowledge Base",
             "host": "kb.aloramc.com",
-            "port": 80
+            "port": 80,
+            "type": "web-service"
         },
         {
             "category": "Web Services",
             "name": "Staff KB",
             "host": "staffkb.aloramc.com",
-            "port": 80
+            "port": 80,
+            "type": "web-service"
         },
         {
             "category": "Web Services",
             "name": "Punishments Dashboard",
             "host": "bans.aloramc.com",
-            "port": 80
+            "port": 80,
+            "type": "web-service"
         },
         {
             "category": "Web Services",
             "name": "Staff Dashboard",
             "host": "staff.aloramc.com",
-            "port": 80
+            "port": 80,
+            "type": "web-service"
         },
         {
             "category": "Game Servers",
             "name": "Proxy",
             "host": "gh5.aquahost.io",
-            "port": 25000
+            "port": 25000,
+            "type": "java-server"
         },
         {
             "category": "Game Servers",
             "name": "Hub",
             "host": "gh5.aquahost.io",
-            "port": 25001
+            "port": 25001,
+            "type": "java-server"
         },
         {
             "category": "Game Servers",
             "name": "CaveBlock",
             "host": "gh5.aquahost.io",
-            "port": 25003
+            "port": 25003,
+            "type": "java-server"
         },
         {
             "category": "Game Servers",
             "name": "Arcade",
             "host": "gh5.aquahost.io",
-            "port": 25004
+            "port": 25004,
+            "type": "java-server"
         },
         {
             "category": "Game Servers",
             "name": "SMP",
             "host": "gh5.aquahost.io",
-            "port": 25005
+            "port": 25005,
+            "type": "java-server"
         },
         {
             "category": "Game Servers",
             "name": "Dev",
             "host": "gh5.aquahost.io",
-            "port": 25002
+            "port": 25002,
+            "type": "java-server"
+        },
+        {
+            "category": "Game Servers",
+            "name": "Bedrock",
+            "host": "gh5.aquahost.io",
+            "port": 19132,
+            "type": "bedrock-server"
         },
         {
             "category": "Databases",
             "name": "Database1",
             "host": "db.aquahost.io",
-            "port": 3306
+            "port": 3306,
+            "type": "none"
         },
         {
             "category": "Bots",
             "name": "Support Bot",
             "host": "gh5.aquahost.io",
-            "port": 25006
+            "port": 25006,
+            "type": "none"
         },
         {
             "category": "Bots",
             "name": "Suggestions Bot",
             "host": "gh5.aquahost.io",
-            "port": 25111
+            "port": 25111,
+            "type": "none"
         }
     ]
 }
