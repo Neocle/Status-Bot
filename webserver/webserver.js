@@ -40,7 +40,7 @@ app.get('/script', (req, res) => {
             description: config.webserver.description,
             openGraphImage: config.webserver.openGraphImage,
         });
-
+        res.setHeader('Content-Type', 'application/javascript');
         res.send(jsContent);
     } else {
         res.status(404).send('Script not found');
