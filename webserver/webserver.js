@@ -4,6 +4,7 @@ const fs = require('fs');
 const { getServiceStatuses, calculateUptime, authorize, getStatusesByDate, getServiceUptimeHistory, getIncidents } = require('../database/database');
 const app = express();
 const config = require('../config.json');
+require('dotenv').config();
 
 function renderTemplate(filePath, data) {
     let content = fs.readFileSync(filePath, 'utf8');
@@ -53,7 +54,7 @@ app.get('/statuses', async (req, res) => {
 
         const response = await fetch(`${config.webserver.publicAddress}/api/statuses`, {
             headers: {
-                Authorization: 'c7d726b205c301a4117f4134b0d651b43518f720362a02d866cde2f83d03d2a6',
+                Authorization: process.env.SECRET_PASSWORD,
             },
         });
         const data = await response.json();
@@ -70,7 +71,7 @@ app.get('/incidents', async (req, res) => {
 
         const response = await fetch(`${config.webserver.publicAddress}/api/services/incidents`, {
             headers: {
-                Authorization: 'c7d726b205c301a4117f4134b0d651b43518f720362a02d866cde2f83d03d2a6',
+                Authorization: process.env.SECRET_PASSWORD,
             },
         });
         const data = await response.json();

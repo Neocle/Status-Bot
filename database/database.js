@@ -3,6 +3,7 @@ const path = require('path');
 const pingService = require('../utils/pingService');
 const config = require('../config.json');
 const crypto = require('crypto');
+require('dotenv').config();
 
 const RATE_LIMIT_WINDOW = config.rateLimitTime;
 const MAX_REQUESTS = config.rateLimit;
@@ -59,9 +60,6 @@ db.serialize(() => {
             user_id TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
-
-        INSERT OR IGNORE INTO tokens (token, user_id)
-        VALUES ('c7d726b205c301a4117f4134b0d651b43518f720362a02d866cde2f83d03d2a6', '${config.clientId}');
     `);
 
     db.run(`
@@ -101,6 +99,20 @@ db.serialize(() => {
             UNIQUE (service_id)
         )
     `);
+
+    const adminApiKey = process.env.SECRET_PASSWORD
+    db.run(
+        `
+        INSERT OR IGNORE INTO tokens (token, user_id)
+        VALUES (?, ?);
+        `,
+        [adminApiKey, config.clientId],
+        (err) => {
+            if (err) {
+                console.error('Error inserting token:', err.message);
+            }
+        }
+    );
 
 });
 
