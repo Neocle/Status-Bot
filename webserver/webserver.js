@@ -257,7 +257,11 @@ app.get('/api/services/incidents', authorize, (req, res) => {
         });
 
         if (!filteredIncidents || filteredIncidents.length === 0) {
-            return res.status(404).send(`No incidents found for the given criteria.`);
+            return res.status(200).json({
+                service: serviceName || 'All Services',
+                incidents: [],
+                message: 'No incidents found for the given criteria.',
+            });
         }
 
         res.json({
