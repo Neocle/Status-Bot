@@ -4,6 +4,7 @@ const config = require('../config.json');
 
 const monitorServices = async (client) => {
     const alertMap = new Map();
+    const downtimeStartMap = new Map();
 
     getAlerts((err, alerts) => {
         if (!err && alerts) {
@@ -36,26 +37,36 @@ const monitorServices = async (client) => {
                     continue;
                 }
 
-                if (current_status === 0 && downtime >= 5) {
-                    if (!alertMap.has(name)) {
+                if (current_status === 0) {
+                    if (!downtimeStartMap.has(name)) {
+                        downtimeStartMap.set(name, new Date());
+                    }
+
+                    const downtimeStart = downtimeStartMap.get(name);
+                    const now = new Date();
+                    const minutesDown = Math.floor((now - downtimeStart) / 60000);
+
+                    if (minutesDown >= 5 && !alertMap.has(name)) {
                         const alertMessage = await alertChannel.send({
-                            content: `<@&${alertRole}> Alert! Service **${name}** is down (${downtime} minutes).`,
+                            content: `<t:${Math.floor(downtimeStart.getTime() / 1000)}> - <@&${alertRole}>, the service **${name}** is marked as offline.`,
                         });
                         alertMap.set(name, alertMessage.id);
                         saveAlert(name, alertMessage.id);
-                        console.log(`Alert sent for service: ${name}`);
                     }
-                } else if (current_status === 1 && alertMap.has(name)) {
-                    const alertMessageId = alertMap.get(name);
-                    try {
-                        const alertMessage = await alertChannel.messages.fetch(alertMessageId);
-                        if (alertMessage) await alertMessage.delete();
-                        console.log(`Alert removed for service: ${name}`);
-                    } catch (error) {
-                        console.error(`Error deleting alert message for service ${name}:`, error.message);
+                } else if (current_status === 1) {
+                    if (alertMap.has(name)) {
+                        const alertMessageId = alertMap.get(name);
+                        try {
+                            const alertMessage = await alertChannel.messages.fetch(alertMessageId);
+                            if (alertMessage) await alertMessage.delete();
+                        } catch (error) {
+                            console.error(`Error deleting alert message for service ${name}:`, error.message);
+                        }
+                        alertMap.delete(name);
+                        deleteAlert(name);
                     }
-                    alertMap.delete(name);
-                    deleteAlert(name);
+
+                    downtimeStartMap.delete(name);
                 }
             }
         });
