@@ -6,6 +6,7 @@ const { initializeServices, getEmbedInfo } = require('./database/database');
 const { startEmbedUpdates } = require('./commands/statuspanel');
 const config = require('./config.json');
 const { monitorServices } = require('./utils/statusChange');
+const { updateActivity } = require('./utils/activity');
 
 initializeServices(config.services);
 
@@ -24,7 +25,7 @@ function loadCommands(dir) {
             const command = require(fullPath);
             if (command.data && command.data.name) {
                 client.commands.set(command.data.name, command);
-                console.log(`Loaded command: ${command.data.name} from ${fullPath}`);
+                console.log(`Loaded command: ${command.data.name}`);
             } else {
                 console.error(`Command file ${fullPath} is not properly formatted.`);
             }
@@ -81,6 +82,7 @@ client.once('ready', async () => {
     });
 
     monitorServices(client)
+    updateActivity(client);
 });
 
 client.on('interactionCreate', async (interaction) => {
@@ -114,6 +116,12 @@ client.on('interactionCreate', async (interaction) => {
         });
     }
 });
+
+
+if (!process.env.TOKEN || process.env.TOKEN === '<YOUR-TOKEN-HERE>') {
+    console.error('Error: Invalid token. Please set a valid token in the .env file.');
+    process.exit(1);
+}
 
 client.login(process.env.TOKEN);
 require("./webserver/webserver.js");
