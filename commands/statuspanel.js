@@ -9,7 +9,7 @@ const startEmbedUpdates = async (client, channelId, messageId) => {
     const message = await channel.messages.fetch(messageId);
     if (!message) return;
 
-    const embed = new EmbedBuilder().setTitle('Service Status').setColor(config.embedsColor);
+    const embed = new EmbedBuilder().setTitle('System Status Overview').setColor(config.embedsColor);
 
     setInterval(() => {
         getServiceStatuses((err, rows) => {
@@ -57,7 +57,7 @@ const startEmbedUpdates = async (client, channelId, messageId) => {
 
                 const uptimePercentage = ((row.uptime / row.checks) * 100).toFixed(2);
 
-                const statusLine = `${row.name}: ${statusEmoji} ${statusText} (Uptime: ${uptimePercentage}%)`;
+                const statusLine = `**•**  **${row.name}**: ${statusEmoji} ${statusText} (Uptime: **${uptimePercentage}%**)`;
 
                 if (!categorizedStatuses[row.category]) {
                     categorizedStatuses[row.category] = [];
@@ -67,7 +67,7 @@ const startEmbedUpdates = async (client, channelId, messageId) => {
 
             let description = '';
             for (const [category, services] of Object.entries(categorizedStatuses)) {
-                description += `**${category}**\n${services.join('\n')}\n\n`;
+                description += `**## ${category}** ${services.join('\n')}\n\n`;
             }
 
             embed.setDescription(description).setTimestamp();

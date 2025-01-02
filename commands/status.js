@@ -19,7 +19,7 @@ module.exports = {
         ),
     async execute(interaction) {
         const duration = interaction.options.getString('duration') || 'all';
-        const embed = new EmbedBuilder().setTitle('Service Status').setColor(config.embedsColor);
+        const embed = new EmbedBuilder().setColor(config.embedsColor);
 
         getServiceStatuses((err, rows) => {
             if (err) {
@@ -82,7 +82,8 @@ module.exports = {
 
                     const uptime = uptimeMap[row.name] || 'N/A';
 
-                    const statusLine = `${row.name}: ${statusEmoji} ${statusText} (Uptime: ${uptime})`;
+                    const statusLine = `**•**  **${row.name}**: ${statusEmoji} ${statusText} (Uptime: **${uptime}%**)`;
+
 
                     if (!categorizedStatuses[row.category]) {
                         categorizedStatuses[row.category] = [];
@@ -90,9 +91,9 @@ module.exports = {
                     categorizedStatuses[row.category].push(statusLine);
                 });
 
-                let description = '';
+                let description = '# System Status Overview\n';
                 for (const [category, services] of Object.entries(categorizedStatuses)) {
-                    description += `**${category}**\n${services.join('\n')}\n\n`;
+                    description += `**## ${category}** ${services.join('\n')}\n\n`;
                 }
 
                 embed.setDescription(description.trim() || 'No service statuses available.').setTimestamp();
